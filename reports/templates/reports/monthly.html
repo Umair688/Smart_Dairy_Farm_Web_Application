@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% load static farm_extras %}
+{% block title %}Report {{ s.label }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-0 text-farm">Monthly profit &amp; loss report</h1>
+    <div class="text-muted">{{ farm.farm_name }} · {{ s.label }}</div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap no-print">
+    <a class="btn btn-outline-success" href="{% url 'reports:csv' %}?month={{ month_value }}"><i class="bi bi-filetype-csv"></i> CSV</a>
+    <a class="btn btn-outline-success" href="{% url 'reports:pdf' %}?month={{ month_value }}"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+    <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+  </div>
+</div>
+
+<form method="get" class="card card-body mb-3 no-print">
+  <div class="row g-2 align-items-end">
+    <div class="col-sm-5 col-md-4">
+      <label class="form-label small mb-1" for="month">Choose month</label>
+      <input class="form-control" type="month" id="month" name="month" value="{{ month_value }}" required>
+    </div>
+    <div class="col-auto"><button class="btn btn-farm" type="submit"><i class="bi bi-graph-up"></i> Generate report</button></div>
+    <div class="col-auto ms-md-auto d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="?month={{ prev_value }}"><i class="bi bi-chevron-left"></i> Previous</a>
+      {% if next_value %}<a class="btn btn-outline-secondary" href="?month={{ next_value }}">Next <i class="bi bi-chevron-right"></i></a>{% endif %}
+    </div>
+  </div>
+</form>
+
+{% if s.status == "profit" %}
+  <div class="alert alert-success verdict"><i class="bi bi-graph-up-arrow"></i> PROFIT of {% money s.net %} in {{ s.label }}{% if s.margin_pct is not None %} ({{ s.margin_pct }}% margin){% endif %}</div>
+{% elif s.status == "loss" %}
+  <div class="alert alert-danger verdict"><i class="bi bi-graph-down-arrow"></i> LOSS of {% money s.net_abs %} in {{ s.label }}{% if s.margin_abs is not None %} ({{ s.margin_abs }}% of income){% endif %}</div>
+{% elif s.status == "even" %}
+  <div class="alert alert-warning verdict"><i class="bi bi-dash-circle"></i> BREAK-EVEN in {{ s.label }}: income equals expenses.</div>
+{% else %}
+  <div class="alert alert-info verdict"><i class="bi bi-info-circle"></i> No records for {{ s.label }} yet.</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat-card shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Milk produced</div><div class="stat-value">{{ s.milk_liters|floatformat:2 }} L</div>
+    <div class="small text-muted">{{ s.avg_daily_liters|floatformat:2 }} L/day avg</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Total income</div><div class="stat-value">{% money s.total_income %}</div>
+    <div class="small text-muted">Milk {% money s.milk_revenue %} · Other {% money s.other_income %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card is-expense shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Total expenses</div><div class="stat-value">{% money s.total_expense %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card {% if s.net < 0 %}is-loss{% else %}is-profit{% endif %} shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Net {% if s.net < 0 %}loss{% else %}profit{% endif %}</div><div class="stat-value">{% money s.net %}</div></div></div></div>
+</div>
+
+{% if s.milk_liters %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="card shadow-sm"><div class="card-body py-2"><span class="text-muted small">Cost per liter</span><div class="fw-semibold">{% money s.cost_per_liter %}</div></div></div></div>
+  <div class="col-md-4"><div class="card shadow-sm"><div class="card-body py-2"><span class="text-muted small">Average milk price per liter</span><div class="fw-semibold">{% money s.revenue_per_liter %}</div></div></div></div>
+  <div class="col-md-4"><div class="card shadow-sm"><div class="card-body py-2"><span class="text-muted small">Break-even milk price per liter</span><div class="fw-semibold">{% money s.break_even_rate %}</div></div></div></div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header card-header-farm">Observations</div>
+  <ul class="list-group list-group-flush">
+    {% for tip in insights %}<li class="list-group-item"><i class="bi bi-lightbulb text-warning"></i> {{ tip }}</li>{% endfor %}
+  </ul>
+</div>
+
+{% if s.has_data %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-8"><div class="card shadow-sm h-100"><div class="card-body">
+    <h2 class="h6 text-farm">Daily income vs expenses</h2><div class="chart-box"><canvas id="dailyChart"></canvas></div></div></div></div>
+  <div class="col-lg-4"><div class="card shadow-sm h-100"><div class="card-body">
+    <h2 class="h6 text-farm">Where the money went</h2><div class="chart-box"><canvas id="catChart"></canvas></div></div></div></div>
+  <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-body">
+    <h2 class="h6 text-farm">Daily milk (liters)</h2><div class="chart-box"><canvas id="milkChart"></canvas></div></div></div></div>
+  <div class="col-lg-6"><div class="card shadow-sm h-100"><div class="card-body">
+    <h2 class="h6 text-farm">Last 6 months</h2><div class="chart-box"><canvas id="trendChart"></canvas></div></div></div></div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100"><div class="card-header card-header-farm">Income breakdown</div>
+      <table class="table mb-0"><tbody>
+        {% for r in s.income_rows %}<tr><td>{{ r.label }}</td><td class="text-end">{% money r.total %}</td><td class="text-end text-muted">{{ r.pct }}%</td></tr>
+        {% empty %}<tr><td class="text-muted">No income recorded.</td></tr>{% endfor %}
+        <tr class="table-farm fw-semibold"><td>Total income</td><td class="text-end">{% money s.total_income %}</td><td></td></tr>
+      </tbody></table></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100"><div class="card-header card-header-farm">Expense breakdown</div>
+      <table class="table mb-0"><tbody>
+        {% for r in s.expense_rows %}<tr><td>{{ r.label }}</td><td class="text-end">{% money r.total %}</td><td class="text-end text-muted">{{ r.pct }}%</td></tr>
+        {% empty %}<tr><td class="text-muted">No expenses recorded.</td></tr>{% endfor %}
+        <tr class="table-farm fw-semibold"><td>Total expenses</td><td class="text-end">{% money s.total_expense %}</td><td></td></tr>
+      </tbody></table></div>
+  </div>
+</div>
+
+{% if s.top_animals %}
+<div class="card shadow-sm mb-3"><div class="card-header card-header-farm">Top milk producers</div>
+  <div class="table-responsive"><table class="table mb-0">
+    <thead><tr><th>Animal</th><th class="text-end">Liters</th><th class="text-end">Milk value</th></tr></thead>
+    <tbody>{% for a in s.top_animals %}<tr><td>{{ a.tag }} {{ a.name }}</td><td class="text-end">{{ a.liters|floatformat:2 }}</td><td class="text-end">{% money a.revenue %}</td></tr>{% endfor %}</tbody>
+  </table></div></div>
+{% endif %}
+
+<div class="card shadow-sm mb-3"><div class="card-header card-header-farm">Last 6 months at a glance</div>
+  <div class="table-responsive"><table class="table mb-0">
+    <thead><tr><th>Month</th><th class="text-end">Milk (L)</th><th class="text-end">Income</th><th class="text-end">Expenses</th><th class="text-end">Profit / loss</th></tr></thead>
+    <tbody>{% for r in series %}
+      <tr><td><a href="?month={{ r.value }}">{{ r.label }}</a></td><td class="text-end">{{ r.liters|floatformat:2 }}</td><td class="text-end">{% money r.income %}</td><td class="text-end">{% money r.expense %}</td>
+      <td class="text-end fw-semibold {% if r.net < 0 %}text-danger{% elif r.net > 0 %}text-success{% endif %}">{% money r.net %}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+
+{{ chart|json_script:"chart-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'core/vendor/chart.umd.js' %}"></script>
+<script>
+(function () {
+  var el = document.getElementById("chart-data");
+  if (!el || !document.getElementById("dailyChart")) return;
+  var d = JSON.parse(el.textContent);
+  var green = "#2e7d32", orange = "#ef6c00", lightGreen = "#81c784";
+  var base = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+
+  new Chart(document.getElementById("dailyChart"), {
+    type: "bar",
+    data: { labels: d.days, datasets: [
+      { label: "Income", data: d.income, backgroundColor: green },
+      { label: "Expenses", data: d.expense, backgroundColor: orange } ] },
+    options: base
+  });
+  new Chart(document.getElementById("milkChart"), {
+    type: "line",
+    data: { labels: d.days, datasets: [{ label: "Liters", data: d.liters, borderColor: green, backgroundColor: lightGreen, fill: true, tension: .25 }] },
+    options: base
+  });
+  new Chart(document.getElementById("catChart"), {
+    type: "doughnut",
+    data: { labels: d.cat_labels, datasets: [{ data: d.cat_values,
+      backgroundColor: ["#1b5e20","#2e7d32","#66bb6a","#a5d6a7","#ef6c00","#ffb74d","#8d6e63","#90a4ae","#bdbdbd"] }] },
+    options: base
+  });
+  new Chart(document.getElementById("trendChart"), {
+    type: "bar",
+    data: { labels: d.trend_labels, datasets: [
+      { label: "Income", data: d.trend_income, backgroundColor: green },
+      { label: "Expenses", data: d.trend_expense, backgroundColor: orange } ] },
+    options: base
+  });
+})();
+</script>
+{% endblock %}

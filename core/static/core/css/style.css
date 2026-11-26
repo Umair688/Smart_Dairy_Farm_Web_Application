@@ -1,0 +1,43 @@
+:root {
+  --farm-dark: #1b5e20;
+  --farm-mid: #2e7d32;
+  --farm-light: #c8e6c9;
+  --farm-pale: #f1f8f2;
+}
+
+body { background: var(--farm-pale); }
+
+.navbar-farm { background: var(--farm-dark); }
+.navbar-farm .nav-link.active { background: rgba(255, 255, 255, .15); border-radius: .375rem; }
+
+.text-farm { color: var(--farm-dark); }
+
+.btn-farm { background: var(--farm-mid); border-color: var(--farm-mid); color: #fff; }
+.btn-farm:hover, .btn-farm:focus { background: var(--farm-dark); border-color: var(--farm-dark); color: #fff; }
+
+.badge-farm { background: var(--farm-light); color: var(--farm-dark); }
+
+.table-farm th { background: var(--farm-light); color: var(--farm-dark); border-bottom: 0; }
+
+.card-header-farm { background: var(--farm-dark); color: #fff; }
+
+.stat-card { border: 0; border-left: 5px solid var(--farm-mid); }
+.stat-card .stat-label { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #6c757d; }
+.stat-card .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--farm-dark); }
+.stat-card.is-loss { border-left-color: #c62828; }
+.stat-card.is-loss .stat-value { color: #c62828; }
+.stat-card.is-profit .stat-value { color: var(--farm-mid); }
+.stat-card.is-expense { border-left-color: #ef6c00; }
+.stat-card.is-expense .stat-value { color: #ef6c00; }
+
+.verdict { font-size: 1.15rem; font-weight: 600; }
+
+.auth-card { max-width: 440px; margin: 2rem auto; }
+
+.chart-box { position: relative; height: 280px; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load static farm_extras %}
+{% block title %}Yearly overview {{ year }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <h1 class="h3 mb-0 text-farm">Yearly overview · {{ year }}</h1>
+  <div class="d-flex gap-2 no-print">
+    <a class="btn btn-outline-secondary" href="?year={{ prev_year }}"><i class="bi bi-chevron-left"></i> {{ prev_year }}</a>
+    <a class="btn btn-outline-secondary" href="?year={{ next_year }}">{{ next_year }} <i class="bi bi-chevron-right"></i></a>
+    <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat-card shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Milk produced</div><div class="stat-value">{{ totals.liters|floatformat:2 }} L</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Total income</div><div class="stat-value">{% money totals.income %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card is-expense shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Total expenses</div><div class="stat-value">{% money totals.expense %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card {% if totals.net < 0 %}is-loss{% else %}is-profit{% endif %} shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Net {% if totals.net < 0 %}loss{% else %}profit{% endif %}</div><div class="stat-value">{% money totals.net %}</div>
+    <div class="small text-muted">{{ profit_months }} profit month{{ profit_months|pluralize }} · {{ loss_months }} loss month{{ loss_months|pluralize }}</div></div></div></div>
+</div>
+
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <div class="chart-box"><canvas id="yearChart"></canvas></div>
+</div></div>
+
+<div class="card shadow-sm mb-3"><div class="table-responsive"><table class="table table-hover mb-0 align-middle">
+  <thead class="table-farm"><tr><th>Month</th><th class="text-end">Milk (L)</th><th class="text-end">Income</th><th class="text-end">Expenses</th><th class="text-end">Profit / loss</th><th></th></tr></thead>
+  <tbody>
+  {% for r in series %}
+    <tr>
+      <td>{{ r.label }}</td>
+      <td class="text-end">{{ r.liters|floatformat:2 }}</td>
+      <td class="text-end">{% money r.income %}</td>
+      <td class="text-end">{% money r.expense %}</td>
+      <td class="text-end fw-semibold {% if r.net < 0 %}text-danger{% elif r.net > 0 %}text-success{% endif %}">{% money r.net %}</td>
+      <td class="text-end no-print"><a class="btn btn-sm btn-outline-success" href="{% url 'reports:monthly' %}?month={{ r.value }}">Open report</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr class="table-farm fw-bold"><td>Total</td><td class="text-end">{{ totals.liters|floatformat:2 }}</td><td class="text-end">{% money totals.income %}</td><td class="text-end">{% money totals.expense %}</td><td class="text-end">{% money totals.net %}</td><td></td></tr></tfoot>
+</table></div></div>
+
+{{ chart|json_script:"chart-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'core/vendor/chart.umd.js' %}"></script>
+<script>
+(function () {
+  var d = JSON.parse(document.getElementById("chart-data").textContent);
+  new Chart(document.getElementById("yearChart"), {
+    data: { labels: d.labels, datasets: [
+      { type: "bar", label: "Income", data: d.income, backgroundColor: "#2e7d32" },
+      { type: "bar", label: "Expenses", data: d.expense, backgroundColor: "#ef6c00" },
+      { type: "line", label: "Profit / loss", data: d.net, borderColor: "#1b5e20", backgroundColor: "#1b5e20", tension: .25 } ] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }
+  });
+})();
+</script>
+{% endblock %}

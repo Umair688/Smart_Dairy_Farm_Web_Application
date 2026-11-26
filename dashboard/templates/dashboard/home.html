@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% load static farm_extras %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-0 text-farm">Welcome, {{ user.get_username }}</h1>
+    <div class="text-muted">{{ s.label }} at a glance</div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-farm" href="{% url 'milk:add' %}"><i class="bi bi-droplet-half"></i> Add milk</a>
+    <a class="btn btn-farm" href="{% url 'expenses:add' %}"><i class="bi bi-cash-stack"></i> Add expense</a>
+    <a class="btn btn-outline-success" href="{% url 'reports:monthly' %}"><i class="bi bi-bar-chart-line"></i> Monthly report</a>
+  </div>
+</div>
+
+{% if not animals_active and not s.has_data %}
+<div class="alert alert-info">
+  <strong>Getting started:</strong> add your <a href="{% url 'animals:add' %}">animals</a>, then record daily
+  <a href="{% url 'milk:add' %}">milk</a> and your <a href="{% url 'expenses:add' %}">expenses</a>. Your profit &amp; loss report builds itself.
+</div>
+{% endif %}
+
+{% if s.status == "loss" %}
+  <div class="alert alert-danger verdict"><i class="bi bi-graph-down-arrow"></i> This month is currently running at a loss of {% money s.net_abs %}.</div>
+{% elif s.status == "profit" %}
+  <div class="alert alert-success verdict"><i class="bi bi-graph-up-arrow"></i> This month is currently in profit: {% money s.net %}.</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card stat-card shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Milk today</div><div class="stat-value">{{ today_liters|floatformat:2 }} L</div>
+    <div class="small text-muted">{{ s.milk_liters|floatformat:2 }} L this month</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Income (month)</div><div class="stat-value">{% money s.total_income %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card is-expense shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Expenses (month)</div><div class="stat-value">{% money s.total_expense %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card stat-card {% if s.net < 0 %}is-loss{% else %}is-profit{% endif %} shadow-sm h-100"><div class="card-body">
+    <div class="stat-label">Net {% if s.net < 0 %}loss{% else %}profit{% endif %}</div><div class="stat-value">{% money s.net %}</div>
+    <div class="small text-muted">{{ animals_active }} animals · {{ animals_lactating }} lactating</div></div></div></div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-8"><div class="card shadow-sm h-100"><div class="card-body">
+    <h2 class="h6 text-farm">Income vs expenses, last 6 months</h2><div class="chart-box"><canvas id="trendChart"></canvas></div></div></div></div>
+  <div class="col-lg-4"><div class="card shadow-sm h-100"><div class="card-body">
+    <h2 class="h6 text-farm">Expenses this month</h2>
+    {% if s.expense_rows %}<div class="chart-box"><canvas id="catChart"></canvas></div>
+    {% else %}<p class="text-muted mb-0">No expenses recorded this month.</p>{% endif %}</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-header card-header-farm d-flex justify-content-between"><span>Recent milk</span><a class="link-light" href="{% url 'milk:list' %}">View all</a></div>
+    <ul class="list-group list-group-flush">
+      {% for m in recent_milk %}<li class="list-group-item d-flex justify-content-between"><span>{{ m.date|date:"d M" }} · {{ m.get_session_display }} · {{ m.animal_display }}</span><strong>{{ m.liters|floatformat:2 }} L</strong></li>
+      {% empty %}<li class="list-group-item text-muted">No milk records yet.</li>{% endfor %}
+    </ul></div></div>
+  <div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-header card-header-farm d-flex justify-content-between"><span>Recent expenses</span><a class="link-light" href="{% url 'expenses:list' %}">View all</a></div>
+    <ul class="list-group list-group-flush">
+      {% for e in recent_expenses %}<li class="list-group-item d-flex justify-content-between"><span>{{ e.date|date:"d M" }} · {{ e.get_category_display }}</span><strong>{% money e.amount %}</strong></li>
+      {% empty %}<li class="list-group-item text-muted">No expenses yet.</li>{% endfor %}
+    </ul></div></div>
+</div>
+
+{{ chart|json_script:"chart-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'core/vendor/chart.umd.js' %}"></script>
+<script>
+(function () {
+  var d = JSON.parse(document.getElementById("chart-data").textContent);
+  var opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+  new Chart(document.getElementById("trendChart"), {
+    type: "bar",
+    data: { labels: d.labels, datasets: [
+      { label: "Income", data: d.income, backgroundColor: "#2e7d32" },
+      { label: "Expenses", data: d.expense, backgroundColor: "#ef6c00" } ] },
+    options: opts
+  });
+  var cat = document.getElementById("catChart");
+  if (cat) {
+    new Chart(cat, { type: "doughnut",
+      data: { labels: d.cat_labels, datasets: [{ data: d.cat_values,
+        backgroundColor: ["#1b5e20","#2e7d32","#66bb6a","#a5d6a7","#ef6c00","#ffb74d","#8d6e63","#90a4ae","#bdbdbd"] }] },
+      options: opts });
+  }
+})();
+</script>
+{% endblock %}
